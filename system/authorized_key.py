@@ -188,7 +188,7 @@ def keyfile(module, user, write=False, path=None, manage_dir=True):
 
     if manage_dir:
         if not os.path.exists(sshdir):
-            os.mkdir(sshdir, 0700)
+            os.mkdirs(sshdir, 0700)
             if module.selinux_enabled():
                 module.set_default_selinux_context(sshdir, False)
         os.chown(sshdir, uid, gid)
