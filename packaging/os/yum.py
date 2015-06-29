@@ -124,7 +124,7 @@ options:
         will be installed.
     required: false
     version_added: "2.0"
-    default: null
+    default: "/"
     aliases: []
 
 notes: []
@@ -171,11 +171,12 @@ def log(msg):
     syslog.openlog('ansible-yum', 0, syslog.LOG_USER)
     syslog.syslog(syslog.LOG_NOTICE, msg)
 
-def yum_base(conf_file=None):
+def yum_base(installroot, conf_file=None):
 
     my = yum.YumBase()
     my.preconf.debuglevel=0
     my.preconf.errorlevel=0
+    my.conf.installroot=installroot
     if conf_file and os.path.exists(conf_file):
         my.preconf.fn = conf_file
     if os.geteuid() != 0:
@@ -207,7 +208,7 @@ def po_to_nevra(po):
     else:
         return '%s-%s-%s.%s' % (po.name, po.version, po.release, po.arch)
 
-def is_installed(module, repoq, pkgspec, conf_file, qf=def_qf, en_repos=None, dis_repos=None, is_pkg=False):
+def is_installed(module, repoq, pkgspec, conf_file, qf=def_qf, en_repos=None, dis_repos=None, is_pkg=False, installroot='/'):
     if en_repos is None:
         en_repos = []
     if dis_repos is None:
@@ -216,7 +217,7 @@ def is_installed(module, repoq, pkgspec, conf_file, qf=def_qf, en_repos=None, di
 
         pkgs = []
         try:
-            my = yum_base(conf_file)
+            my = yum_base(installroot, conf_file)
             for rid in dis_repos:
                 my.repos.disableRepo(rid)
             for rid in en_repos:
@@ -249,7 +250,7 @@ def is_installed(module, repoq, pkgspec, conf_file, qf=def_qf, en_repos=None, di
 
     return []
 
-def is_available(module, repoq, pkgspec, conf_file, qf=def_qf, en_repos=None, dis_repos=None):
+def is_available(module, repoq, pkgspec, conf_file, qf=def_qf, en_repos=None, dis_repos=None, installroot='/'):
     if en_repos is None:
         en_repos = []
     if dis_repos is None:
@@ -259,7 +260,7 @@ def is_available(module, repoq, pkgspec, conf_file, qf=def_qf, en_repos=None, di
 
         pkgs = []
         try:
-            my = yum_base(conf_file)
+            my = yum_base(installroot, conf_file)
             for rid in dis_repos:
                 my.repos.disableRepo(rid)
             for rid in en_repos:
@@ -292,7 +293,7 @@ def is_available(module, repoq, pkgspec, conf_file, qf=def_qf, en_repos=None, di
 
     return []
 
-def is_update(module, repoq, pkgspec, conf_file, qf=def_qf, en_repos=None, dis_repos=None):
+def is_update(module, repoq, pkgspec, conf_file, qf=def_qf, en_repos=None, dis_repos=None, installroot='/'):
     if en_repos is None:
         en_repos = []
     if dis_repos is None:
@@ -305,7 +306,7 @@ def is_update(module, repoq, pkgspec, conf_file, qf=def_qf, en_repos=None, dis_r
         updates = []
 
         try:
-            my = yum_base(conf_file)
+            my = yum_base(installroot, conf_file)
             for rid in dis_repos:
                 my.repos.disableRepo(rid)
             for rid in en_repos:
@@ -343,7 +344,7 @@ def is_update(module, repoq, pkgspec, conf_file, qf=def_qf, en_repos=None, dis_r
 
     return set()
 
-def what_provides(module, repoq, req_spec, conf_file,  qf=def_qf, en_repos=None, dis_repos=None):
+def what_provides(module, repoq, req_spec, conf_file,  qf=def_qf, en_repos=None, dis_repos=None, installroot='/'):
     if en_repos is None:
         en_repos = []
     if dis_repos is None:
@@ -353,7 +354,7 @@ def what_provides(module, repoq, req_spec, conf_file,  qf=def_qf, en_repos=None,
 
         pkgs = []
         try:
-            my = yum_base(conf_file)
+            my = yum_base(installroot, conf_file)
             for rid in dis_repos:
                 my.repos.disableRepo(rid)
             for rid in en_repos:
@@ -830,7 +831,7 @@ def ensure(module, state, pkgs, conf_file, enablerepo, disablerepo,
         if module.params.get('update_cache'):
             module.run_command(yum_basecmd + ['makecache'])
 
-        my = yum_base(conf_file)
+        my = yum_base(installroot, conf_file)
         try:
             if disablerepo:
                 my.repos.disableRepo(disablerepo)
@@ -890,7 +891,7 @@ def main():
             conf_file=dict(default=None),
             disable_gpg_check=dict(required=False, default="no", type='bool'),
             update_cache=dict(required=False, default="no", type='bool'),
-            install_root=dict(required=False, type='str'),
+            installroot=dict(required=False, type='str'),
             # this should not be needed, but exists as a failsafe
             install_repoquery=dict(required=False, default="yes", type='bool'),
         ),
@@ -912,7 +913,7 @@ def main():
         # the system then users will see an error message using the yum API.
         # Use repoquery in those cases.
 
-        my = yum_base(params['conf_file'])
+        my = yum_base(params['installroot'], params['conf_file'])
         # A sideeffect of accessing conf is that the configuration is
         # loaded and plugins are discovered
         my.conf
@@ -928,10 +929,9 @@ def main():
         enablerepo = params.get('enablerepo', '')
         disablerepo = params.get('disablerepo', '')
         disable_gpg_check = params['disable_gpg_check']
-        installroot = params['installroot']
         results = ensure(module, state, pkg, params['conf_file'], enablerepo,
                     disablerepo, disable_gpg_check, exclude, repoquery,
-                    installroot)
+                    params['installroot'])
         if repoquery:
             results['msg'] = '%s %s' % (results.get('msg',''), 'Warning: Due to potential bad behaviour with rhnplugin and certificates, used slower repoquery calls instead of Yum API.')
 
