@@ -540,11 +540,6 @@ def install(module, items, repoq, yum_basecmd, conf_file, en_repos, dis_repos):
                     shutil.rmtree(tempdir)
                     module.fail_json(msg="Failure downloading %s, %s" % (spec, e))
 
-        #groups :(
-        elif  spec.startswith('@'):
-            # complete wild ass guess b/c it's a group
-            pkg = spec
-
         # range requires or file-requires or pkgname :(
         else:
             # most common case is the pkg is already installed and done
@@ -660,14 +655,9 @@ def remove(module, items, repoq, yum_basecmd, conf_file, en_repos, dis_repos):
     res['rc'] = 0
 
     for pkg in items:
-        is_group = False
-        # group remove - this is doom on a stick
-        if pkg.startswith('@'):
-            is_group = True
-        else:
-            if not is_installed(module, repoq, pkg, conf_file, en_repos=en_repos, dis_repos=dis_repos):
-                res['results'].append('%s is not installed' % pkg)
-                continue
+        if not is_installed(module, repoq, pkg, conf_file, en_repos=en_repos, dis_repos=dis_repos):
+            res['results'].append('%s is not installed' % pkg)
+            continue
 
         pkgs.append(pkg)
 
@@ -692,12 +682,10 @@ def remove(module, items, repoq, yum_basecmd, conf_file, en_repos, dis_repos):
         # at this point we should check to see if the pkg is no longer present
         
         for pkg in pkgs:
-            if not pkg.startswith('@'): # we can't sensibly check for a group being uninstalled reliably
-                # look to see if the pkg shows up from is_installed. If it doesn't
-                if not is_installed(module, repoq, pkg, conf_file, en_repos=en_repos, dis_repos=dis_repos):
-                    res['changed'] = True
-                else:
-                    module.fail_json(**res)
+            if not is_installed(module, repoq, pkg, conf_file, en_repos=en_repos, dis_repos=dis_repos):
+                res['changed'] = True
+            else:
+                module.fail_json(**res)
 
         if rc != 0:
             module.fail_json(**res)
@@ -717,11 +705,8 @@ def latest(module, items, repoq, yum_basecmd, conf_file, en_repos, dis_repos):
         pkg = None
         basecmd = 'update'
         cmd = ''
-        # groups, again
-        if spec.startswith('@'):
-            pkg = spec
         
-        elif spec == '*': #update all
+        if spec == '*': #update all
             # use check-update to see if there is any need
             rc,out,err = module.run_command(yum_basecmd + ['check-update'])
             if rc == 100:
@@ -813,29 +798,40 @@ def ensure(module, state, pkgs, conf_file, enablerepo, disablerepo,
         e_cmd = ['--exclude=%s' % exclude]
         yum_basecmd.extend(e_cmd)
 
-    if state in ['installed', 'present', 'latest']:
+    my = yum_base(conf_file)
+    try:
+        if disablerepo:
+            my.repos.disableRepo(disablerepo)
+        current_repos = my.repos.repos.keys()
+        if enablerepo:
+            try:
+                my.repos.enableRepo(enablerepo)
+                new_repos = my.repos.repos.keys()
+                for i in new_repos:
+                    if not i in current_repos:
+                        rid = my.repos.getRepo(i)
+                        a = rid.repoXML.repoid
+                current_repos = new_repos
+            except yum.Errors.YumBaseError, e:
+                module.fail_json(msg="Error setting/accessing repos: %s" % (e))
 
+        _pkgs = []
+        for pkg in pkgs:
+            if pkg.startswith('@'):
+                group_name = pkg[1:]
+                for group in my.comps.return_groups(group_name):
+                    _pkgs += group.default_packages.keys()
+            else:
+               _pkgs.append(pkg)
+        pkgs = _pkgs
+
+    except yum.Errors.YumBaseError, e:
+        module.fail_json(msg="Failure talking to yum: %s" % e)
+
+    if state in ['installed', 'present', 'latest']:
         if module.params.get('update_cache'):
             module.run_command(yum_basecmd + ['makecache'])
 
-        my = yum_base(conf_file)
-        try:
-            if disablerepo:
-                my.repos.disableRepo(disablerepo)
-            current_repos = my.repos.repos.keys()
-            if enablerepo:
-                try:
-                    my.repos.enableRepo(enablerepo)
-                    new_repos = my.repos.repos.keys()
-                    for i in new_repos:
-                        if not i in current_repos:
-                            rid = my.repos.getRepo(i)
-                            a = rid.repoXML.repoid
-                    current_repos = new_repos
-                except yum.Errors.YumBaseError, e:
-                    module.fail_json(msg="Error setting/accessing repos: %s" % (e))
-        except yum.Errors.YumBaseError, e:
-            module.fail_json(msg="Error accessing repos: %s" % e)
     if state in ['installed', 'present']:
         if disable_gpg_check:
             yum_basecmd.append('--nogpgcheck')
@@ -909,7 +905,7 @@ def main():
             if repoquerybin:
                 repoquery = [repoquerybin, '--show-duplicates', '--plugins', '--quiet']
 
-        pkg = [ p.strip() for p in params['name']]
+        pkg = [p.strip() for p in params['name']]
         exclude = params['exclude']
         state = params['state']
         enablerepo = params.get('enablerepo', '')
