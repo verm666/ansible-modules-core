@@ -208,7 +208,7 @@ def po_to_nevra(po):
     else:
         return '%s-%s-%s.%s' % (po.name, po.version, po.release, po.arch)
 
-def is_installed(module, repoq, pkgspec, conf_file, qf=def_qf, en_repos=None, dis_repos=None, is_pkg=False, installroot='/'):
+def is_installed(module, repoq, pkgspec, conf_file, installroot, qf=def_qf, en_repos=None, dis_repos=None, is_pkg=False):
     if en_repos is None:
         en_repos = []
     if dis_repos is None:
@@ -250,7 +250,7 @@ def is_installed(module, repoq, pkgspec, conf_file, qf=def_qf, en_repos=None, di
 
     return []
 
-def is_available(module, repoq, pkgspec, conf_file, qf=def_qf, en_repos=None, dis_repos=None, installroot='/'):
+def is_available(module, repoq, pkgspec, conf_file, installroot, qf=def_qf, en_repos=None, dis_repos=None):
     if en_repos is None:
         en_repos = []
     if dis_repos is None:
@@ -293,7 +293,7 @@ def is_available(module, repoq, pkgspec, conf_file, qf=def_qf, en_repos=None, di
 
     return []
 
-def is_update(module, repoq, pkgspec, conf_file, qf=def_qf, en_repos=None, dis_repos=None, installroot='/'):
+def is_update(module, repoq, pkgspec, conf_file, installroot, qf=def_qf, en_repos=None, dis_repos=None):
     if en_repos is None:
         en_repos = []
     if dis_repos is None:
@@ -344,7 +344,7 @@ def is_update(module, repoq, pkgspec, conf_file, qf=def_qf, en_repos=None, dis_r
 
     return set()
 
-def what_provides(module, repoq, req_spec, conf_file,  qf=def_qf, en_repos=None, dis_repos=None, installroot='/'):
+def what_provides(module, repoq, req_spec, conf_file, installroot, qf=def_qf, en_repos=None, dis_repos=None):
     if en_repos is None:
         en_repos = []
     if dis_repos is None:
@@ -389,7 +389,7 @@ def what_provides(module, repoq, req_spec, conf_file,  qf=def_qf, en_repos=None,
             out += out2
             pkgs = set([ p for p in out.split('\n') if p.strip() ])
             if not pkgs:
-                pkgs = is_installed(module, repoq, req_spec, conf_file, qf=qf)
+                pkgs = is_installed(module, repoq, req_spec, conf_file, installroot, qf=qf)
             return pkgs
         else:
             module.fail_json(msg='Error from repoquery: %s: %s' % (cmd, err + err2))
@@ -484,7 +484,7 @@ def repolist(module, repoq, qf="%{repoid}"):
         ret = set([ p for p in out.split('\n') if p.strip() ])
     return ret
 
-def list_stuff(module, repoquerybin, conf_file, stuff):
+def list_stuff(module, repoquerybin, conf_file, stuff, installroot):
 
     qf = "%{name}|%{epoch}|%{version}|%{release}|%{arch}|%{repoid}"
     repoq = [repoquerybin, '--show-duplicates', '--plugins', '--quiet']
@@ -492,17 +492,17 @@ def list_stuff(module, repoquerybin, conf_file, stuff):
         repoq += ['-c', conf_file]
 
     if stuff == 'installed':
-        return [ pkg_to_dict(p) for p in is_installed(module, repoq, '-a', conf_file, qf=qf) if p.strip() ]
+        return [ pkg_to_dict(p) for p in is_installed(module, repoq, '-a', conf_file, installroot, qf=qf) if p.strip() ]
     elif stuff == 'updates':
-        return [ pkg_to_dict(p) for p in is_update(module, repoq, '-a', conf_file, qf=qf) if p.strip() ]
+        return [ pkg_to_dict(p) for p in is_update(module, repoq, '-a', conf_file, installroot, qf=qf) if p.strip() ]
     elif stuff == 'available':
-        return [ pkg_to_dict(p) for p in is_available(module, repoq, '-a', conf_file, qf=qf) if p.strip() ]
+        return [ pkg_to_dict(p) for p in is_available(module, repoq, '-a', conf_file, installroot, qf=qf) if p.strip() ]
     elif stuff == 'repos':
         return [ dict(repoid=name, state='enabled') for name in repolist(module, repoq) if name.strip() ]
     else:
-        return [ pkg_to_dict(p) for p in is_installed(module, repoq, stuff, conf_file, qf=qf) + is_available(module, repoq, stuff, conf_file, qf=qf) if p.strip() ]
+        return [ pkg_to_dict(p) for p in is_installed(module, repoq, stuff, conf_file, installroot, qf=qf) + is_available(module, repoq, stuff, conf_file, installroot, qf=qf) if p.strip() ]
 
-def install(module, items, repoq, yum_basecmd, conf_file, en_repos, dis_repos):
+def install(module, items, repoq, yum_basecmd, conf_file, installroot, en_repos, dis_repos):
 
     pkgs = []
     res = {}
@@ -525,7 +525,7 @@ def install(module, items, repoq, yum_basecmd, conf_file, en_repos, dis_repos):
 
             nvra = local_nvra(module, spec)
             # look for them in the rpmdb
-            if is_installed(module, repoq, nvra, conf_file, en_repos=en_repos, dis_repos=dis_repos):
+            if is_installed(module, repoq, nvra, conf_file, installroot, en_repos=en_repos, dis_repos=dis_repos):
                 # if they are there, skip it
                 continue
             pkg = spec
@@ -562,13 +562,13 @@ def install(module, items, repoq, yum_basecmd, conf_file, en_repos, dis_repos):
             # short circuit all the bs - and search for it as a pkg in is_installed
             # if you find it then we're done
             if not set(['*','?']).intersection(set(spec)):
-                installed_pkgs = is_installed(module, repoq, spec, conf_file, en_repos=en_repos, dis_repos=dis_repos, is_pkg=True)
+                installed_pkgs = is_installed(module, repoq, spec, conf_file, installroot, en_repos=en_repos, dis_repos=dis_repos, is_pkg=True)
                 if installed_pkgs:
                     res['results'].append('%s providing %s is already installed' % (installed_pkgs[0], spec))
                     continue
 
             # look up what pkgs provide this
-            pkglist = what_provides(module, repoq, spec, conf_file, en_repos=en_repos, dis_repos=dis_repos)
+            pkglist = what_provides(module, repoq, spec, conf_file, installroot, en_repos=en_repos, dis_repos=dis_repos)
             if not pkglist:
                 res['msg'] += "No Package matching '%s' found available, installed or updated" % spec
                 module.fail_json(**res)
@@ -585,7 +585,7 @@ def install(module, items, repoq, yum_basecmd, conf_file, en_repos, dis_repos):
 
             found = False
             for this in pkglist:
-                if is_installed(module, repoq, this, conf_file, en_repos=en_repos, dis_repos=dis_repos, is_pkg=True):
+                if is_installed(module, repoq, this, conf_file, installroot, en_repos=en_repos, dis_repos=dis_repos, is_pkg=True):
                     found = True
                     res['results'].append('%s providing %s is already installed' % (this, spec))
                     break
@@ -596,7 +596,7 @@ def install(module, items, repoq, yum_basecmd, conf_file, en_repos, dis_repos):
             # but virt provides should be all caught in what_provides on its own.
             # highly irritating
             if not found:
-                if is_installed(module, repoq, spec, conf_file, en_repos=en_repos, dis_repos=dis_repos):
+                if is_installed(module, repoq, spec, conf_file, installroot, en_repos=en_repos, dis_repos=dis_repos):
                     found = True
                     res['results'].append('package providing %s is already installed' % (spec))
 
@@ -676,7 +676,7 @@ def remove(module, items, repoq, yum_basecmd, conf_file, en_repos, dis_repos):
         if pkg.startswith('@'):
             is_group = True
         else:
-            if not is_installed(module, repoq, pkg, conf_file, en_repos=en_repos, dis_repos=dis_repos):
+            if not is_installed(module, repoq, pkg, conf_file, installroot, en_repos=en_repos, dis_repos=dis_repos):
                 res['results'].append('%s is not installed' % pkg)
                 continue
 
@@ -705,7 +705,7 @@ def remove(module, items, repoq, yum_basecmd, conf_file, en_repos, dis_repos):
         for pkg in pkgs:
             if not pkg.startswith('@'): # we can't sensibly check for a group being uninstalled reliably
                 # look to see if the pkg shows up from is_installed. If it doesn't
-                if not is_installed(module, repoq, pkg, conf_file, en_repos=en_repos, dis_repos=dis_repos):
+                if not is_installed(module, repoq, pkg, conf_file, installroot, en_repos=en_repos, dis_repos=dis_repos):
                     res['changed'] = True
                 else:
                     module.fail_json(**res)
@@ -743,12 +743,12 @@ def latest(module, items, repoq, yum_basecmd, conf_file, en_repos, dis_repos):
 
         # dep/pkgname  - find it
         else:
-            if is_installed(module, repoq, spec, conf_file, en_repos=en_repos, dis_repos=dis_repos):
+            if is_installed(module, repoq, spec, conf_file, installroot, en_repos=en_repos, dis_repos=dis_repos):
                 basecmd = 'update'
             else:
                 basecmd = 'install'
 
-            pkglist = what_provides(module, repoq, spec, conf_file, en_repos=en_repos, dis_repos=dis_repos)
+            pkglist = what_provides(module, repoq, spec, conf_file, installroot, en_repos=en_repos, dis_repos=dis_repos)
             if not pkglist:
                 res['msg'] += "No Package matching '%s' found available, installed or updated" % spec
                 module.fail_json(**res)
@@ -852,13 +852,13 @@ def ensure(module, state, pkgs, conf_file, enablerepo, disablerepo,
     if state in ['installed', 'present']:
         if disable_gpg_check:
             yum_basecmd.append('--nogpgcheck')
-        res = install(module, pkgs, repoq, yum_basecmd, conf_file, en_repos, dis_repos)
+        res = install(module, pkgs, repoq, yum_basecmd, conf_file, installroot, en_repos, dis_repos)
     elif state in ['removed', 'absent']:
-        res = remove(module, pkgs, repoq, yum_basecmd, conf_file, en_repos, dis_repos)
+        res = remove(module, pkgs, repoq, yum_basecmd, conf_file, installroot, en_repos, dis_repos)
     elif state == 'latest':
         if disable_gpg_check:
             yum_basecmd.append('--nogpgcheck')
-        res = latest(module, pkgs, repoq, yum_basecmd, conf_file, en_repos, dis_repos)
+        res = latest(module, pkgs, repoq, yum_basecmd, conf_file, installroot, en_repos, dis_repos)
     else:
         # should be caught by AnsibleModule argument_spec
         module.fail_json(msg="we should never get here unless this all"
@@ -891,7 +891,7 @@ def main():
             conf_file=dict(default=None),
             disable_gpg_check=dict(required=False, default="no", type='bool'),
             update_cache=dict(required=False, default="no", type='bool'),
-            installroot=dict(required=False, type='str'),
+            installroot=dict(required=False, type='str', default="/"),
             # this should not be needed, but exists as a failsafe
             install_repoquery=dict(required=False, default="yes", type='bool'),
         ),
