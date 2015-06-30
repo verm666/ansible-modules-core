@@ -661,7 +661,7 @@ def install(module, items, repoq, yum_basecmd, conf_file, installroot, en_repos,
     return res
 
 
-def remove(module, items, repoq, yum_basecmd, conf_file, en_repos, dis_repos):
+def remove(module, items, repoq, yum_basecmd, conf_file, installroot, en_repos, dis_repos):
 
     pkgs = []
     res = {}
