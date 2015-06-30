@@ -176,7 +176,8 @@ def yum_base(installroot, conf_file=None):
     my = yum.YumBase()
     my.preconf.debuglevel=0
     my.preconf.errorlevel=0
-    my.conf.installroot=installroot
+    if installroot != '/':
+        my.conf.installroot=installroot
     if conf_file and os.path.exists(conf_file):
         my.preconf.fn = conf_file
     if os.geteuid() != 0:
@@ -822,7 +823,7 @@ def ensure(module, state, pkgs, conf_file, enablerepo, disablerepo,
     if exclude:
         e_cmd = ['--exclude=%s' % exclude]
         yum_basecmd.extend(e_cmd)
-    if installroot:
+    if installroot != '/':
         e_cmd = ['--installroot=%s' % installroot]
         yum_basecmd.extend(e_cmd)
 
