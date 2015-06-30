@@ -715,7 +715,7 @@ def remove(module, items, repoq, yum_basecmd, conf_file, installroot, en_repos, 
 
     return res
 
-def latest(module, items, repoq, yum_basecmd, conf_file, en_repos, dis_repos):
+def latest(module, items, repoq, yum_basecmd, conf_file, installroot, en_repos, dis_repos):
 
     res = {}
     res['results'] = []
@@ -755,11 +755,11 @@ def latest(module, items, repoq, yum_basecmd, conf_file, en_repos, dis_repos):
 
             nothing_to_do = True
             for this in pkglist:
-                if basecmd == 'install' and is_available(module, repoq, this, conf_file, en_repos=en_repos, dis_repos=dis_repos):
+                if basecmd == 'install' and is_available(module, repoq, this, conf_file, installroot, en_repos=en_repos, dis_repos=dis_repos):
                     nothing_to_do = False
                     break
 
-                if basecmd == 'update' and is_update(module, repoq, this, conf_file, en_repos=en_repos, dis_repos=dis_repos):
+                if basecmd == 'update' and is_update(module, repoq, this, conf_file, installroot, en_repos=en_repos, dis_repos=dis_repos):
                     nothing_to_do = False
                     break
 
